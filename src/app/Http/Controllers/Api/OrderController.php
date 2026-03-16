@@ -8,8 +8,10 @@ use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\ExternalPaymentService;
 use DB;
 use App\Models\Receipt;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +22,9 @@ class OrderController extends Controller
      */
     public function index()
     {
-        //
+        return OrderResource::collection(
+            Order::with('items.product','receipt')->paginate(10)
+        );
     }
 
     /**
@@ -61,6 +65,26 @@ class OrderController extends Controller
 
             $tax = $subtotal * 0.16;
             $total = $subtotal + $tax;
+
+            $paymentService = app(ExternalPaymentService::class);
+
+            for ($i = 0; $i < 3; $i++) {
+
+                try {
+
+                    $paymentService->process($total);
+
+                    break;
+
+                } catch (Exception $e) {
+
+                    if ($i === 2) {
+                        abort(502, 'Payment service unavailable after retries');
+                    }
+
+                    sleep(1);
+                }
+            }
 
             $receiptNumber = 'RCPT-' . str_pad(Receipt::count() + 1, 6, '0', STR_PAD_LEFT);
 
