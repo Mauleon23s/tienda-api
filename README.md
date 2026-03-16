@@ -47,7 +47,7 @@ No es necesario instalar PHP ni Composer localmente.
 ## 1. Clonar el repositorio
 
 ``` bash
-git clone <repo-url>
+git clone https://github.com/Mauleon23s/tienda-api.git
 cd tienda-backend
 ```
 
