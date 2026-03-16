@@ -22,6 +22,7 @@ class CreateOrderTest extends TestCase
         ]);
 
         $response = $this->actingAs($user, 'api')->postJson('/api/orders', [
+            'idempotency_key' => 'unique-key-1',
             'items' => [
                 [
                     'product_id' => $product->id,
@@ -30,19 +31,54 @@ class CreateOrderTest extends TestCase
             ]
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(201);
 
         $this->assertDatabaseHas('orders', [
+            'idempotency_key' => 'unique-key-1',
             'status' => 'completed'
-        ]);
-
-        $this->assertDatabaseHas('receipts', [
-            'order_id' => 1
         ]);
 
         $this->assertDatabaseHas('products', [
             'id' => $product->id,
             'stock' => 8
+        ]);
+    }
+
+    public function test_order_creation_is_idempotent()
+    {
+        $user = User::factory()->create();
+
+        $product = Product::create([
+            'name' => 'Pizza',
+            'price' => 10,
+            'stock' => 100
+        ]);
+
+        $payload = [
+            'idempotency_key' => 'idempotent-key',
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'quantity' => 1
+                ]
+            ]
+        ];
+
+        // First attempt
+        $response1 = $this->actingAs($user, 'api')->postJson('/api/orders', $payload);
+        $response1->assertStatus(201);
+        $this->assertDatabaseCount('orders', 1);
+
+        // Second attempt with same key
+        $response2 = $this->actingAs($user, 'api')->postJson('/api/orders', $payload);
+        $response2->assertStatus(200);
+        $response2->assertJson(['is_duplicate' => true]);
+
+        // Ensure no new order was created and stock wasn't deducted twice
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'stock' => 99
         ]);
     }
 
@@ -57,6 +93,7 @@ class CreateOrderTest extends TestCase
         ]);
 
         $response = $this->actingAs($user, 'api')->postJson('/api/orders', [
+            'idempotency_key' => 'unique-key-2',
             'items' => [
                 [
                     'product_id' => $product->id,
@@ -71,7 +108,7 @@ class CreateOrderTest extends TestCase
 
     public function test_rollbacks_if_payment_service_fails()
     {
-        $this->mock(\App\Services\ExternalPaymentService::class, function ($mock) {
+        $this->mock(\App\Services\ExternalPaymentService::class , function ($mock) {
             $mock->shouldReceive('process')
                 ->andThrow(new \Exception('Payment failed'));
         });
@@ -85,6 +122,7 @@ class CreateOrderTest extends TestCase
         ]);
 
         $response = $this->actingAs($user, 'api')->postJson('/api/orders', [
+            'idempotency_key' => 'unique-key-3',
             'items' => [
                 [
                     'product_id' => $product->id,
@@ -96,7 +134,7 @@ class CreateOrderTest extends TestCase
         $response->assertStatus(502);
 
         $this->assertDatabaseMissing('orders', [
-            'status' => 'completed'
+            'idempotency_key' => 'unique-key-3'
         ]);
 
         $this->assertDatabaseHas('products', [

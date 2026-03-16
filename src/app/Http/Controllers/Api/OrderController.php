@@ -9,7 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\ExternalPaymentService;
-use DB;
+use Illuminate\Support\Facades\DB;
 use App\Models\Receipt;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +23,7 @@ class OrderController extends Controller
     public function index()
     {
         return OrderResource::collection(
-            Order::with('items.product','receipt')->paginate(10)
+            Order::with('items.product', 'receipt')->paginate(10)
         );
     }
 
@@ -32,28 +32,46 @@ class OrderController extends Controller
      */
     public function store(StoreOrderRequest $request)
     {
+        // 1. Verificar idempotencia
+        $existingOrder = Order::where('idempotency_key', $request->idempotency_key)->first();
+        if ($existingOrder) {
+            $existingOrder->load('receipt');
+            return response()->json([
+                'order_id' => $existingOrder->id,
+                'receipt_number' => $existingOrder->receipt?->receipt_number,
+                'subtotal' => $existingOrder->receipt?->subtotal,
+                'tax' => $existingOrder->receipt?->tax,
+                'total' => $existingOrder->receipt?->total,
+                'is_duplicate' => true
+            ]);
+        }
+
         return DB::transaction(function () use ($request) {
 
             $order = Order::create([
+                'idempotency_key' => $request->idempotency_key,
                 'status' => 'completed'
             ]);
 
             $subtotal = 0;
 
-            foreach ($request->items as $item) {
+            // 2. Ordenar items por product_id para prevenir deadlocks
+            $items = collect($request->items)->sortBy('product_id')->values()->all();
+
+            foreach ($items as $item) {
 
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
-            
+
                 if ($product->stock < $item['quantity']) {
                     abort(400, "Insufficient stock for product {$product->id}");
                 }
-            
+
                 $product->decrement('stock', $item['quantity']);
-            
+
                 $lineSubtotal = $product->price * $item['quantity'];
-            
+
                 $subtotal += $lineSubtotal;
-            
+
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
@@ -76,7 +94,8 @@ class OrderController extends Controller
 
                     break;
 
-                } catch (Exception $e) {
+                }
+                catch (Exception $e) {
 
                     if ($i === 2) {
                         abort(502, 'Payment service unavailable after retries');
@@ -103,7 +122,7 @@ class OrderController extends Controller
                 'subtotal' => $subtotal,
                 'tax' => $tax,
                 'total' => $total
-            ]);
+            ], 201);
         });
     }
 
@@ -125,7 +144,7 @@ class OrderController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+    //
     }
 
     /**
@@ -133,7 +152,7 @@ class OrderController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+    //
     }
 
     public function cancel(Order $order)
