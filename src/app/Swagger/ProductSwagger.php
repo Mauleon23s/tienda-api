@@ -8,6 +8,7 @@ use OpenApi\Attributes as OA;
     path: "/api/products",
     summary: "List products",
     tags: ["Products"],
+    security: [["bearerAuth" => []]],
     responses: [
         new OA\Response(response: 200, description: "Products list")
     ]
@@ -17,6 +18,7 @@ use OpenApi\Attributes as OA;
     path: "/api/products/{id}",
     summary: "Get product",
     tags: ["Products"],
+    security: [["bearerAuth" => []]],
     parameters: [
         new OA\Parameter(
             name: "id",
