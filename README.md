@@ -54,6 +54,7 @@ cd tienda-api
 ## 2. Levantar los contenedores
 
 ``` bash
+docker compose down (detener otras instancias opcional)
 docker compose up -d --build
 ```
 
