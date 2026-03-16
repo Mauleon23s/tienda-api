@@ -14,6 +14,7 @@ de:
 -   Generación de recibos en PDF
 -   Documentación de API con Swagger
 -   Autenticación JWT
+-   Tests automatizados
 
 ------------------------------------------------------------------------
 
@@ -26,6 +27,7 @@ de:
 -   JWT Authentication
 -   Swagger (OpenAPI)
 -   DOMPDF
+-   PHPUnit
 
 ------------------------------------------------------------------------
 
@@ -101,36 +103,13 @@ http://localhost:8000/api/documentation
 Desde Swagger es posible:
 
 -   Ver todos los endpoints
--   Probar requests directamente
--   Revisar parámetros y ejemplos
--   Autenticarse con JWT
-
-### Autenticación en Swagger
-
-1.  Ejecutar:
-
-POST /api/login
-
-Body:
-
-``` json
-{
-  "email": "test@example.com",
-  "password": "test123"
-}
-```
-
-2.  Copiar el token.
-
-3.  Presionar **Authorize** en Swagger y usar:
-
-Authorization: Bearer {token}
+-   Revisar ejemplos de request y response
+-   Probar los endpoints directamente
+-   Autenticarse con JWT usando **Authorize**
 
 ------------------------------------------------------------------------
 
 # Autenticación
-
-La API utiliza JWT.
 
 Endpoint de login:
 
@@ -177,47 +156,60 @@ GET /api/receipts/{id}/pdf
 
 # Flujo de compra
 
-1.  Cliente envía una orden con múltiples productos.
-2.  Se valida stock disponible.
-3.  Se bloquean registros con lockForUpdate().
-4.  Se descuenta stock.
+1.  El cliente envía una orden con múltiples productos.
+2.  Se valida disponibilidad de stock.
+3.  Se bloquean filas de productos usando `lockForUpdate()`.
+4.  Se descuenta el stock correspondiente.
 5.  Se calcula subtotal, impuestos y total.
-6.  Se procesa pago mediante servicio externo simulado.
-7.  Se genera recibo.
+6.  Se procesa el pago mediante un servicio externo simulado.
+7.  Se genera un recibo.
 8.  Se devuelve la información de la orden.
 
 ------------------------------------------------------------------------
 
 # Control de concurrencia
 
-Se utiliza:
+Para evitar inconsistencias en el inventario se utilizan:
 
-Product::lockForUpdate()
+-   Transacciones de base de datos (`DB::transaction()`)
+-   Bloqueo de filas (`lockForUpdate()`)
 
-para evitar que múltiples compras simultáneas consuman el mismo stock.
-
-------------------------------------------------------------------------
-
-# Simulación de servicio externo
-
-ExternalPaymentService simula una pasarela de pago que puede fallar
-aleatoriamente.
-
-El sistema implementa reintentos para manejar fallos temporales.
+Esto evita que múltiples compras simultáneas consuman el mismo stock.
 
 ------------------------------------------------------------------------
 
-# Generación de recibos
+# Integración con servicio externo
 
-Después de crear una orden se genera automáticamente un recibo con:
+El servicio `ExternalPaymentService` simula una pasarela de pago externa
+que puede fallar aleatoriamente.
 
--   número de recibo
--   subtotal
--   impuestos
--   total
--   fecha de emisión
+El sistema implementa una política de **reintentos** antes de abortar la
+operación.
 
-Los recibos pueden consultarse en JSON o descargarse como PDF.
+Si el servicio falla, la transacción completa se revierte.
+
+------------------------------------------------------------------------
+
+# Tests automatizados
+
+Se incluye una suite mínima de tests para los casos críticos:
+
+-   Creación de orden con stock suficiente
+-   Error cuando el stock es insuficiente
+-   Rollback de la transacción cuando falla el proveedor de pagos
+
+Ejecutar los tests:
+
+``` bash
+docker compose exec app php artisan test
+```
+
+Ejemplo de resultado:
+
+PASS Tests`\Feature`{=tex}`\CreateOrderTest`{=tex} ✓ can create order
+with valid stock\
+✓ fails when stock is insufficient\
+✓ rollbacks if payment service fails
 
 ------------------------------------------------------------------------
 
@@ -226,3 +218,4 @@ Los recibos pueden consultarse en JSON o descargarse como PDF.
 Daniel Sánchez
 
 ------------------------------------------------------------------------
+
