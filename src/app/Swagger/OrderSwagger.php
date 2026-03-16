@@ -45,8 +45,9 @@ use OpenApi\Attributes as OA;
     requestBody: new OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ["items"],
+            required: ["idempotency_key", "items"],
             properties: [
+                new OA\Property(property: "idempotency_key", type: "string", example: "uuid-1234-5678"),
                 new OA\Property(
                     property: "items",
                     type: "array",
@@ -67,17 +68,30 @@ use OpenApi\Attributes as OA;
     responses: [
         new OA\Response(
             response: 201,
-            description: "Order created",
+            description: "Order created successfully",
             content: new OA\JsonContent(
                 properties: [
-                    new OA\Property(property: "id", type: "integer", example: 1),
-                    new OA\Property(property: "status", type: "string", example: "created"),
+                    new OA\Property(property: "order_id", type: "integer", example: 1),
+                    new OA\Property(property: "receipt_number", type: "string", example: "RCPT-000001"),
                     new OA\Property(property: "total", type: "number", format: "float", example: 450.50)
                 ]
             )
         ),
+        new OA\Response(
+            response: 200,
+            description: "Duplicate order returned (Idempotency)",
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: "order_id", type: "integer", example: 1),
+                    new OA\Property(property: "receipt_number", type: "string", example: "RCPT-000001"),
+                    new OA\Property(property: "total", type: "number", format: "float", example: 450.50),
+                    new OA\Property(property: "is_duplicate", type: "boolean", example: true)
+                ]
+            )
+        ),
         new OA\Response(response: 400, description: "Invalid order or insufficient stock"),
-        new OA\Response(response: 401, description: "Unauthorized")
+        new OA\Response(response: 401, description: "Unauthorized"),
+        new OA\Response(response: 502, description: "Payment service failure")
     ]
 )]
 

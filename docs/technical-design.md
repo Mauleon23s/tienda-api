@@ -46,29 +46,23 @@ Campos principales:
 
 ---
 
-## Estrategia de control de stock
+## Estrategia de control de stock y Concurrencia
 
 Para evitar inconsistencias en el stock cuando múltiples clientes realizan compras simultáneamente, se implementó un control basado en:
-Transacciones de base de datos.
-Todas las operaciones de creación de órdenes se ejecutan dentro de:
-DB::transaction()
 
-Esto garantiza que:
-- si el pago falla
-- si ocurre un error en la operación
-
-toda la transacción se revierte.
-Además, se utiliza:
-lockForUpdate() sobre los registros de productos.
-Esto bloquea las filas correspondientes durante la transacción evitando que dos órdenes simultáneas consuman el mismo stock.
+1.  **Transacciones de base de datos**: Todas las operaciones de creación de órdenes se ejecutan dentro de `DB::transaction()`. Esto garantiza que si el pago falla o ocurre un error, toda la operación se revierte.
+2.  **Bloqueo de filas (Pessimistic Locking)**: Se utiliza `lockForUpdate()` sobre los registros de productos durante la transacción.
+3.  **Prevención de Deadlocks**: El sistema ordena los productos por ID antes de aplicar los bloqueos. Esto asegura un orden consistente de adquisición de recursos, eliminando el riesgo de deadlocks circulares bajo alta concurrencia.
 
 ---
 
-## Manejo de concurrencia
+## Idempotencia
 
-La concurrencia se controla mediante:
-Row-level locking con lockForUpdate()
-Esto asegura que múltiples procesos concurrentes no puedan modificar el mismo registro de producto hasta que finalice la transacción.
+Se ha implementado una estrategia de idempotencia para manejar reintentos de red de forma segura:
+
+-   El cliente debe enviar un encabezado o propiedad `idempotency_key` (preferiblemente un UUID).
+-   Si el servidor recibe una petición con una clave que ya fue procesada exitosamente, devuelve la respuesta cacheada o los datos del pedido original con un flag `is_duplicate: true`.
+-   Esto previene el cobro doble y la duplicación de pedidos ante fallos de conexión.
 
 ---
 
