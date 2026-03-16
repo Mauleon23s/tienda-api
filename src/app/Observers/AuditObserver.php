@@ -6,36 +6,49 @@ use App\Models\AuditLog;
 
 class AuditObserver
 {
-    public function created($model)
+    protected function baseData($model)
     {
-        AuditLog::create([
+        return [
             'model_type' => class_basename($model),
             'model_id' => $model->id,
-            'event' => 'created',
-            'old_values' => null,
-            'new_values' => $model->toArray()
-        ]);
+            'user_id' => auth('api')->id(),
+            'ip_address' => request()->ip()
+        ];
     }
 
-    public function updated($model)
+    public function created($model): void
     {
-        AuditLog::create([
-            'model_type' => class_basename($model),
-            'model_id' => $model->id,
-            'event' => 'updated',
-            'old_values' => $model->getOriginal(),
-            'new_values' => $model->getChanges()
-        ]);
+        AuditLog::create(array_merge(
+            $this->baseData($model),
+            [
+                'event' => 'created',
+                'old_values' => null,
+                'new_values' => $model->toArray()
+            ]
+        ));
     }
 
-    public function deleted($model)
+    public function updated($model): void
     {
-        AuditLog::create([
-            'model_type' => class_basename($model),
-            'model_id' => $model->id,
-            'event' => 'deleted',
-            'old_values' => $model->getOriginal(),
-            'new_values' => null
-        ]);
+        AuditLog::create(array_merge(
+            $this->baseData($model),
+            [
+                'event' => 'updated',
+                'old_values' => $model->getOriginal(),
+                'new_values' => $model->getChanges()
+            ]
+        ));
+    }
+
+    public function deleted($model): void
+    {
+        AuditLog::create(array_merge(
+            $this->baseData($model),
+            [
+                'event' => 'deleted',
+                'old_values' => $model->getOriginal(),
+                'new_values' => null
+            ]
+        ));
     }
 }
