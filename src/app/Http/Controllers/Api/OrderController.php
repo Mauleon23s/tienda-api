@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
+use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -85,9 +86,14 @@ class OrderController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show($id)
     {
-        //
+        $order = Order::with([
+            'items',
+            'receipt'
+        ])->findOrFail($id);
+
+        return new OrderResource($order);
     }
 
     /**
@@ -104,5 +110,27 @@ class OrderController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    public function cancel(Order $order)
+    {
+        if ($order->status === 'cancelled') {
+            abort(400, 'Order already cancelled');
+        }
+
+        DB::transaction(function () use ($order) {
+            foreach ($order->items as $item) {
+                $product = Product::lockForUpdate()->find($item->product_id);
+                $product->increment('stock', $item->quantity);
+            }
+
+            $order->update([
+                'status' => 'cancelled'
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Order cancelled successfully'
+        ]);
     }
 }

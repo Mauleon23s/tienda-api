@@ -3,4 +3,9 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\OrderController;
 
-Route::post('orders', [OrderController::class, 'store']);
+Route::prefix('orders')->group(function () {
+    Route::post('/', [OrderController::class, 'store']);
+    Route::post('/{order}/cancel', [OrderController::class, 'cancel']);
+    Route::get('/{order}', [OrderController::class, 'show']);
+
+});
