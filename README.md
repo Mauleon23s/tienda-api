@@ -48,7 +48,7 @@ No es necesario instalar PHP ni Composer localmente.
 
 ``` bash
 git clone https://github.com/Mauleon23s/tienda-api.git
-cd tienda-backend
+cd tienda-api
 ```
 
 ## 2. Levantar los contenedores
