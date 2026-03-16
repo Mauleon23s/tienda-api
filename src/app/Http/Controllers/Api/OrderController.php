@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use DB;
+use App\Models\Receipt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,56 +25,59 @@ class OrderController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreOrderRequest $request): JsonResponse
+    public function store(StoreOrderRequest $request)
     {
-        $data = $request->validated();
-
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($request) {
 
             $order = Order::create([
-                'status' => 'pending',
-                'total' => 0,
-                'tax' => 0
+                'status' => 'completed'
             ]);
 
-            $total = 0;
+            $subtotal = 0;
 
-            foreach ($data['items'] as $item) {
+            foreach ($request->items as $item) {
 
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
-
+            
                 if ($product->stock < $item['quantity']) {
-                    abort(400, 'Insufficient stock for product: '.$product->name);
+                    abort(400, "Insufficient stock for product {$product->id}");
                 }
-
-                $subtotal = $product->price * $item['quantity'];
-
+            
+                $product->decrement('stock', $item['quantity']);
+            
+                $lineSubtotal = $product->price * $item['quantity'];
+            
+                $subtotal += $lineSubtotal;
+            
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'quantity' => $item['quantity'],
                     'price' => $product->price,
-                    'subtotal' => $subtotal
+                    'subtotal' => $lineSubtotal
                 ]);
-
-                $product->decrement('stock', $item['quantity']);
-
-                $total += $subtotal;
             }
 
-            $tax = $total * 0.16;
+            $tax = $subtotal * 0.16;
+            $total = $subtotal + $tax;
 
-            $order->update([
-                'total' => $total,
+            $receiptNumber = 'RCPT-' . str_pad(Receipt::count() + 1, 6, '0', STR_PAD_LEFT);
+
+            $receipt = Receipt::create([
+                'order_id' => $order->id,
+                'receipt_number' => $receiptNumber,
+                'subtotal' => $subtotal,
                 'tax' => $tax,
-                'status' => 'completed'
+                'total' => $total,
+                'issued_at' => now()
             ]);
 
             return response()->json([
-                'message' => 'Order created successfully',
                 'order_id' => $order->id,
-                'total' => $total,
-                'tax' => $tax
+                'receipt_number' => $receipt->receipt_number,
+                'subtotal' => $subtotal,
+                'tax' => $tax,
+                'total' => $total
             ]);
         });
     }
