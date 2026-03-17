@@ -74,6 +74,7 @@ cp src/.env.example src/.env
 
 ``` bash
 docker compose exec app php artisan key:generate
+docker compose exec app php artisan jwt:secret
 ```
 
 ## 6. Ejecutar migraciones
