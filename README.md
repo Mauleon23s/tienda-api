@@ -89,6 +89,12 @@ docker compose exec app php artisan migrate
 docker compose exec app php artisan db:seed
 ```
 
+## 8. Documentación
+
+``` bash
+docker compose exec app php artisan l5-swagger:generate
+```
+
 Usuario de prueba:
 
 email: test@example.com\
